@@ -1,35 +1,32 @@
 package errors
 
 import (
-	"errors"
-	"fmt"
-	"io"
-	"regexp"
-	"strings"
-	"testing"
+	stdfmt "fmt"
+	stdregexp "regexp"
+	stdstrings "strings"
+	stdtesting "testing"
 )
 
-func TestFormatNew(t *testing.T) {
+func TestFormatNew(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
 		want   string
 	}{{
-		New("error"),
+		fixtureNew(),
 		"%s",
 		"error",
 	}, {
-		New("error"),
+		fixtureNew(),
 		"%v",
 		"error",
 	}, {
-		New("error"),
+		fixtureNew(),
 		"%+v",
-		"error\n" +
-			"github.com/pkg/errors.TestFormatNew\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:26",
+		"error",
 	}, {
-		New("error"),
+		fixtureNew(),
 		"%q",
 		`"error"`,
 	}}
@@ -39,25 +36,24 @@ func TestFormatNew(t *testing.T) {
 	}
 }
 
-func TestFormatErrorf(t *testing.T) {
+func TestFormatErrorf(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
 		want   string
 	}{{
-		Errorf("%s", "error"),
+		fixtureNewf(),
 		"%s",
 		"error",
 	}, {
-		Errorf("%s", "error"),
+		fixtureNewf(),
 		"%v",
 		"error",
 	}, {
-		Errorf("%s", "error"),
+		fixtureNewf(),
 		"%+v",
-		"error\n" +
-			"github.com/pkg/errors.TestFormatErrorf\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:56",
+		"error",
 	}}
 
 	for i, tt := range tests {
@@ -65,49 +61,42 @@ func TestFormatErrorf(t *testing.T) {
 	}
 }
 
-func TestFormatWrap(t *testing.T) {
+func TestFormatWrap(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
 		want   string
 	}{{
-		Wrap(New("error"), "error2"),
+		fixtureWrapNew(),
 		"%s",
 		"error2: error",
 	}, {
-		Wrap(New("error"), "error2"),
+		fixtureWrapNew(),
 		"%v",
 		"error2: error",
 	}, {
-		Wrap(New("error"), "error2"),
+		fixtureWrapNew(),
 		"%+v",
-		"error\n" +
-			"github.com/pkg/errors.TestFormatWrap\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:82",
+		"error2: error",
 	}, {
-		Wrap(io.EOF, "error"),
+		fixtureWrapEOF(),
 		"%s",
 		"error: EOF",
 	}, {
-		Wrap(io.EOF, "error"),
+		fixtureWrapEOF(),
 		"%v",
 		"error: EOF",
 	}, {
-		Wrap(io.EOF, "error"),
+		fixtureWrapEOF(),
 		"%+v",
-		"EOF\n" +
-			"error\n" +
-			"github.com/pkg/errors.TestFormatWrap\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:96",
+		"error: EOF",
 	}, {
-		Wrap(Wrap(io.EOF, "error1"), "error2"),
+		fixtureDoubleWrap(),
 		"%+v",
-		"EOF\n" +
-			"error1\n" +
-			"github.com/pkg/errors.TestFormatWrap\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:103\n",
+		"error2: error1: EOF",
 	}, {
-		Wrap(New("error with space"), "context"),
+		fixtureWrapContext(),
 		"%q",
 		`"context: error with space"`,
 	}}
@@ -117,40 +106,36 @@ func TestFormatWrap(t *testing.T) {
 	}
 }
 
-func TestFormatWrapf(t *testing.T) {
+func TestFormatWrapf(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
 		want   string
 	}{{
-		Wrapf(io.EOF, "error%d", 2),
+		fixtureWrapfEOF(),
 		"%s",
 		"error2: EOF",
 	}, {
-		Wrapf(io.EOF, "error%d", 2),
+		fixtureWrapfEOF(),
 		"%v",
 		"error2: EOF",
 	}, {
-		Wrapf(io.EOF, "error%d", 2),
+		fixtureWrapfEOF(),
 		"%+v",
-		"EOF\n" +
-			"error2\n" +
-			"github.com/pkg/errors.TestFormatWrapf\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:134",
+		"error2: EOF",
 	}, {
-		Wrapf(New("error"), "error%d", 2),
+		fixtureWrapfNew(),
 		"%s",
 		"error2: error",
 	}, {
-		Wrapf(New("error"), "error%d", 2),
+		fixtureWrapfNew(),
 		"%v",
 		"error2: error",
 	}, {
-		Wrapf(New("error"), "error%d", 2),
+		fixtureWrapfNew(),
 		"%+v",
-		"error\n" +
-			"github.com/pkg/errors.TestFormatWrapf\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:149",
+		"error2: error",
 	}}
 
 	for i, tt := range tests {
@@ -158,225 +143,168 @@ func TestFormatWrapf(t *testing.T) {
 	}
 }
 
-func TestFormatWithStack(t *testing.T) {
+func TestFormatWithStack(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
-		want   []string
+		want   string
 	}{{
-		WithStack(io.EOF),
+		fixtureWithStackEOF(),
 		"%s",
-		[]string{"EOF"},
+		"EOF",
 	}, {
-		WithStack(io.EOF),
+		fixtureWithStackEOF(),
 		"%v",
-		[]string{"EOF"},
+		"EOF",
 	}, {
-		WithStack(io.EOF),
+		fixtureWithStackEOF(),
 		"%+v",
-		[]string{"EOF",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:175"},
+		"EOF",
 	}, {
-		WithStack(New("error")),
+		fixtureWithStackNew(),
 		"%s",
-		[]string{"error"},
+		"error",
 	}, {
-		WithStack(New("error")),
+		fixtureWithStackNew(),
 		"%v",
-		[]string{"error"},
+		"error",
 	}, {
-		WithStack(New("error")),
+		fixtureWithStackNew(),
 		"%+v",
-		[]string{"error",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:189",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:189"},
+		"error",
 	}, {
-		WithStack(WithStack(io.EOF)),
+		fixtureDoubleWithStack(),
 		"%+v",
-		[]string{"EOF",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:197",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:197"},
+		"EOF",
 	}, {
-		WithStack(WithStack(Wrapf(io.EOF, "message"))),
+		fixtureWithStackWrapfEOF(),
 		"%+v",
-		[]string{"EOF",
-			"message",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:205",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:205",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:205"},
+		"message: EOF",
 	}, {
-		WithStack(Errorf("error%d", 1)),
+		fixtureWithStackNewf(),
 		"%+v",
-		[]string{"error1",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:216",
-			"github.com/pkg/errors.TestFormatWithStack\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:216"},
+		"error1",
 	}}
 
 	for i, tt := range tests {
-		testFormatCompleteCompare(t, i, tt.error, tt.format, tt.want, true)
+		testFormatRegexp(t, i, tt.error, tt.format, tt.want)
 	}
 }
 
-func TestFormatWithMessage(t *testing.T) {
+func TestFormatWithMessage(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
-		want   []string
+		want   string
 	}{{
-		WithMessage(New("error"), "error2"),
+		fixtureWithMessageNew(),
 		"%s",
-		[]string{"error2: error"},
+		"error2: error",
 	}, {
-		WithMessage(New("error"), "error2"),
+		fixtureWithMessageNew(),
 		"%v",
-		[]string{"error2: error"},
+		"error2: error",
 	}, {
-		WithMessage(New("error"), "error2"),
+		fixtureWithMessageNew(),
 		"%+v",
-		[]string{
-			"error",
-			"github.com/pkg/errors.TestFormatWithMessage\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:244",
-			"error2"},
+		"error2: error",
 	}, {
-		WithMessage(io.EOF, "addition1"),
+		fixtureWithMessageEOF(),
 		"%s",
-		[]string{"addition1: EOF"},
+		"addition1: EOF",
 	}, {
-		WithMessage(io.EOF, "addition1"),
+		fixtureWithMessageEOF(),
 		"%v",
-		[]string{"addition1: EOF"},
+		"addition1: EOF",
 	}, {
-		WithMessage(io.EOF, "addition1"),
+		fixtureWithMessageEOF(),
 		"%+v",
-		[]string{"EOF", "addition1"},
+		"addition1: EOF",
 	}, {
-		WithMessage(WithMessage(io.EOF, "addition1"), "addition2"),
+		fixtureDoubleWithMessage(),
 		"%v",
-		[]string{"addition2: addition1: EOF"},
+		"addition2: addition1: EOF",
 	}, {
-		WithMessage(WithMessage(io.EOF, "addition1"), "addition2"),
+		fixtureDoubleWithMessage(),
 		"%+v",
-		[]string{"EOF", "addition1", "addition2"},
+		"addition2: addition1: EOF",
 	}, {
-		Wrap(WithMessage(io.EOF, "error1"), "error2"),
+		fixtureWrapOfWithMessage(),
 		"%+v",
-		[]string{"EOF", "error1", "error2",
-			"github.com/pkg/errors.TestFormatWithMessage\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:272"},
+		"error2: error1: EOF",
 	}, {
-		WithMessage(Errorf("error%d", 1), "error2"),
+		fixtureWithMessageNewf(),
 		"%+v",
-		[]string{"error1",
-			"github.com/pkg/errors.TestFormatWithMessage\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:278",
-			"error2"},
+		"error2: error1",
 	}, {
-		WithMessage(WithStack(io.EOF), "error"),
+		fixtureWithMessageWithStack(),
 		"%+v",
-		[]string{
-			"EOF",
-			"github.com/pkg/errors.TestFormatWithMessage\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:285",
-			"error"},
+		"error: EOF",
 	}, {
-		WithMessage(Wrap(WithStack(io.EOF), "inside-error"), "outside-error"),
+		fixtureWithMessageWrapWithStack(),
 		"%+v",
-		[]string{
-			"EOF",
-			"github.com/pkg/errors.TestFormatWithMessage\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:293",
-			"inside-error",
-			"github.com/pkg/errors.TestFormatWithMessage\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:293",
-			"outside-error"},
+		"outside-error: inside-error: EOF",
 	}}
 
 	for i, tt := range tests {
-		testFormatCompleteCompare(t, i, tt.error, tt.format, tt.want, true)
+		testFormatRegexp(t, i, tt.error, tt.format, tt.want)
 	}
 }
 
-func TestFormatGeneric(t *testing.T) {
+func TestFormatGeneric(t *stdtesting.T) {
 	starts := []struct {
 		err  error
-		want []string
+		want string
 	}{
-		{New("new-error"), []string{
+		{
+			fixtureGenericNew(),
 			"new-error",
-			"github.com/pkg/errors.TestFormatGeneric\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:315"},
-		}, {Errorf("errorf-error"), []string{
+		}, {
+			fixtureGenericNewf(),
 			"errorf-error",
-			"github.com/pkg/errors.TestFormatGeneric\n" +
-				"\t.+/github.com/pkg/errors/format_test.go:319"},
-		}, {errors.New("errors-new-error"), []string{
-			"errors-new-error"},
+		}, {
+			fixtureGenericStdlibNew(),
+			"errors-new-error",
 		},
 	}
 
+	// want — вклад обёртки в сообщение: WithStack сообщения не меняет.
 	wrappers := []wrapper{
 		{
-			func(err error) error { return WithMessage(err, "with-message") },
-			[]string{"with-message"},
+			fixtureWrapWithMessage,
+			"with-message",
 		}, {
-			func(err error) error { return WithStack(err) },
-			[]string{
-				"github.com/pkg/errors.(func·002|TestFormatGeneric.func2)\n\t" +
-					".+/github.com/pkg/errors/format_test.go:333",
-			},
+			fixtureWrapWithStack,
+			"",
 		}, {
-			func(err error) error { return Wrap(err, "wrap-error") },
-			[]string{
-				"wrap-error",
-				"github.com/pkg/errors.(func·003|TestFormatGeneric.func3)\n\t" +
-					".+/github.com/pkg/errors/format_test.go:339",
-			},
+			fixtureWrapWrap,
+			"wrap-error",
 		}, {
-			func(err error) error { return Wrapf(err, "wrapf-error%d", 1) },
-			[]string{
-				"wrapf-error1",
-				"github.com/pkg/errors.(func·004|TestFormatGeneric.func4)\n\t" +
-					".+/github.com/pkg/errors/format_test.go:346",
-			},
+			fixtureWrapWrapf,
+			"wrapf-error1",
 		},
 	}
 
 	for s := range starts {
 		err := starts[s].err
 		want := starts[s].want
-		testFormatCompleteCompare(t, s, err, "%+v", want, false)
+		testFormatRegexp(t, s, err, "%+v", want)
 		testGenericRecursive(t, err, want, wrappers, 3)
 	}
 }
 
-func wrappedNew(message string) error { // This function will be mid-stack inlined in go 1.12+
-	return New(message)
-}
-
-func TestFormatWrappedNew(t *testing.T) {
+func TestFormatWrappedNew(t *stdtesting.T) {
 	tests := []struct {
 		error
+
 		format string
 		want   string
 	}{{
-		wrappedNew("error"),
+		fixtureWrappedNew("error"),
 		"%+v",
-		"error\n" +
-			"github.com/pkg/errors.wrappedNew\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:364\n" +
-			"github.com/pkg/errors.TestFormatWrappedNew\n" +
-			"\t.+/github.com/pkg/errors/format_test.go:373",
+		"error",
 	}}
 
 	for i, tt := range tests {
@@ -384,11 +312,11 @@ func TestFormatWrappedNew(t *testing.T) {
 	}
 }
 
-func testFormatRegexp(t *testing.T, n int, arg interface{}, format, want string) {
+func testFormatRegexp(t *stdtesting.T, n int, arg any, format, want string) {
 	t.Helper()
-	got := fmt.Sprintf(format, arg)
-	gotLines := strings.SplitN(got, "\n", -1)
-	wantLines := strings.SplitN(want, "\n", -1)
+	got := stdfmt.Sprintf(format, arg)
+	gotLines := stdstrings.Split(got, "\n")
+	wantLines := stdstrings.Split(want, "\n")
 
 	if len(wantLines) > len(gotLines) {
 		t.Errorf("test %d: wantLines(%d) > gotLines(%d):\n got: %q\nwant: %q", n+1, len(wantLines), len(gotLines), got, want)
@@ -396,7 +324,7 @@ func testFormatRegexp(t *testing.T, n int, arg interface{}, format, want string)
 	}
 
 	for i, w := range wantLines {
-		match, err := regexp.MatchString(w, gotLines[i])
+		match, err := stdregexp.MatchString(w, gotLines[i])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -406,153 +334,27 @@ func testFormatRegexp(t *testing.T, n int, arg interface{}, format, want string)
 	}
 }
 
-var stackLineR = regexp.MustCompile(`\.`)
-
-// parseBlocks parses input into a slice, where:
-//  - incase entry contains a newline, its a stacktrace
-//  - incase entry contains no newline, its a solo line.
-//
-// Detecting stack boundaries only works incase the WithStack-calls are
-// to be found on the same line, thats why it is optionally here.
-//
-// Example use:
-//
-// for _, e := range blocks {
-//   if strings.ContainsAny(e, "\n") {
-//     // Match as stack
-//   } else {
-//     // Match as line
-//   }
-// }
-//
-func parseBlocks(input string, detectStackboundaries bool) ([]string, error) {
-	var blocks []string
-
-	stack := ""
-	wasStack := false
-	lines := map[string]bool{} // already found lines
-
-	for _, l := range strings.Split(input, "\n") {
-		isStackLine := stackLineR.MatchString(l)
-
-		switch {
-		case !isStackLine && wasStack:
-			blocks = append(blocks, stack, l)
-			stack = ""
-			lines = map[string]bool{}
-		case isStackLine:
-			if wasStack {
-				// Detecting two stacks after another, possible cause lines match in
-				// our tests due to WithStack(WithStack(io.EOF)) on same line.
-				if detectStackboundaries {
-					if lines[l] {
-						if len(stack) == 0 {
-							return nil, errors.New("len of block must not be zero here")
-						}
-
-						blocks = append(blocks, stack)
-						stack = l
-						lines = map[string]bool{l: true}
-						continue
-					}
-				}
-
-				stack = stack + "\n" + l
-			} else {
-				stack = l
-			}
-			lines[l] = true
-		case !isStackLine && !wasStack:
-			blocks = append(blocks, l)
-		default:
-			return nil, errors.New("must not happen")
-		}
-
-		wasStack = isStackLine
-	}
-
-	// Use up stack
-	if stack != "" {
-		blocks = append(blocks, stack)
-	}
-	return blocks, nil
-}
-
-func testFormatCompleteCompare(t *testing.T, n int, arg interface{}, format string, want []string, detectStackBoundaries bool) {
-	gotStr := fmt.Sprintf(format, arg)
-
-	got, err := parseBlocks(gotStr, detectStackBoundaries)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(got) != len(want) {
-		t.Fatalf("test %d: fmt.Sprintf(%s, err) -> wrong number of blocks: got(%d) want(%d)\n got: %s\nwant: %s\ngotStr: %q",
-			n+1, format, len(got), len(want), prettyBlocks(got), prettyBlocks(want), gotStr)
-	}
-
-	for i := range got {
-		if strings.ContainsAny(want[i], "\n") {
-			// Match as stack
-			match, err := regexp.MatchString(want[i], got[i])
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !match {
-				t.Fatalf("test %d: block %d: fmt.Sprintf(%q, err):\ngot:\n%q\nwant:\n%q\nall-got:\n%s\nall-want:\n%s\n",
-					n+1, i+1, format, got[i], want[i], prettyBlocks(got), prettyBlocks(want))
-			}
-		} else {
-			// Match as message
-			if got[i] != want[i] {
-				t.Fatalf("test %d: fmt.Sprintf(%s, err) at block %d got != want:\n got: %q\nwant: %q", n+1, format, i+1, got[i], want[i])
-			}
-		}
-	}
-}
-
 type wrapper struct {
 	wrap func(err error) error
-	want []string
+	want string
 }
 
-func prettyBlocks(blocks []string) string {
-	var out []string
-
-	for _, b := range blocks {
-		out = append(out, fmt.Sprintf("%v", b))
-	}
-
-	return "   " + strings.Join(out, "\n   ")
-}
-
-func testGenericRecursive(t *testing.T, beforeErr error, beforeWant []string, list []wrapper, maxDepth int) {
-	if len(beforeWant) == 0 {
+func testGenericRecursive(t *stdtesting.T, beforeErr error, beforeWant string, list []wrapper, maxDepth int) {
+	t.Helper()
+	if beforeWant == "" {
 		panic("beforeWant must not be empty")
 	}
 	for _, w := range list {
-		if len(w.want) == 0 {
-			panic("want must not be empty")
-		}
-
 		err := w.wrap(beforeErr)
 
-		// Copy required cause append(beforeWant, ..) modified beforeWant subtly.
-		beforeCopy := make([]string, len(beforeWant))
-		copy(beforeCopy, beforeWant)
-
-		beforeWant := beforeCopy
-		last := len(beforeWant) - 1
-		var want []string
-
-		// Merge two stacks behind each other.
-		if strings.ContainsAny(beforeWant[last], "\n") && strings.ContainsAny(w.want[0], "\n") {
-			want = append(beforeWant[:last], append([]string{beforeWant[last] + "((?s).*)" + w.want[0]}, w.want[1:]...)...)
-		} else {
-			want = append(beforeWant, w.want...)
+		// WithStack сообщения не меняет, обёртка с сообщением добавляет
+		// префикс «msg: ».
+		want := beforeWant
+		if w.want != "" {
+			want = w.want + ": " + want
 		}
 
-		testFormatCompleteCompare(t, maxDepth, err, "%+v", want, false)
+		testFormatRegexp(t, maxDepth, err, "%+v", want)
 		if maxDepth > 0 {
 			testGenericRecursive(t, err, want, list, maxDepth-1)
 		}

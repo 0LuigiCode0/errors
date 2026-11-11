@@ -1,97 +1,107 @@
 package errors_test
 
 import (
-	"fmt"
+	stdfmt "fmt"
+	stdio "io"
+	stdstrings "strings"
 
-	"github.com/pkg/errors"
+	"github.com/0LuigiCode0/errors"
 )
+
+// printFnNames печатает только имена функций из расширенного вывода,
+// обрезая часть «file:line» у строк кадра «func file:line» и пропуская
+// пустые строки, чтобы пример не зависел от абсолютных путей к модулю.
+// Строка считается кадром, если хвост после последнего пробела имеет вид
+// «file:line» с числовой строкой (сообщения об ошибках так не оканчиваются).
+func printFnNames(s string) {
+	for ln := range stdstrings.SplitSeq(s, "\n") {
+		if ln == "" {
+			continue
+		}
+		if idx := stdstrings.LastIndex(ln, " "); idx > 0 && isFrameTail(ln[idx+1:]) {
+			ln = ln[:idx]
+		}
+		stdfmt.Println(ln)
+	}
+}
+
+// isFrameTail сообщает, является ли tail хвостом кадра «file:line»:
+// содержит «:», после которого идут только цифры.
+func isFrameTail(tail string) bool {
+	colon := stdstrings.LastIndex(tail, ":")
+	if colon < 0 || colon == len(tail)-1 {
+		return false
+	}
+	for _, r := range tail[colon+1:] {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+
+	return true
+}
+
+func init() {
+	errors.CutTail = 3
+}
 
 func ExampleNew() {
 	err := errors.New("whoops")
-	fmt.Println(err)
+	stdfmt.Println(err)
 
 	// Output: whoops
 }
 
 func ExampleNew_printf() {
 	err := errors.New("whoops")
-	fmt.Printf("%+v", err)
+	printFnNames(stdfmt.Sprintf("%+v", err))
 
-	// Example output:
+	// Output:
 	// whoops
-	// github.com/pkg/errors_test.ExampleNew_printf
-	//         /home/dfc/src/github.com/pkg/errors/example_test.go:17
+	// github.com/0LuigiCode0/errors_test.ExampleNew_printf
 	// testing.runExample
-	//         /home/dfc/go/src/testing/example.go:114
-	// testing.RunExamples
-	//         /home/dfc/go/src/testing/example.go:38
+	// testing.runExamples
 	// testing.(*M).Run
-	//         /home/dfc/go/src/testing/testing.go:744
-	// main.main
-	//         /github.com/pkg/errors/_test/_testmain.go:106
-	// runtime.main
-	//         /home/dfc/go/src/runtime/proc.go:183
-	// runtime.goexit
-	//         /home/dfc/go/src/runtime/asm_amd64.s:2059
 }
 
 func ExampleWithMessage() {
 	cause := errors.New("whoops")
 	err := errors.WithMessage(cause, "oh noes")
-	fmt.Println(err)
+	stdfmt.Println(err)
 
 	// Output: oh noes: whoops
 }
 
+func ExampleWithMessage_global() {
+	stdfmt.Println(errors.ErrExm1)
+
+	// Output: foo
+}
+
+//go:noinline
+func returnWithStack(err error) error { return errors.WithStack(err) }
+
 func ExampleWithStack() {
-	cause := errors.New("whoops")
-	err := errors.WithStack(cause)
-	fmt.Println(err)
+	stdfmt.Println(returnWithStack(errors.New("whoops")))
 
 	// Output: whoops
 }
 
 func ExampleWithStack_printf() {
-	cause := errors.New("whoops")
-	err := errors.WithStack(cause)
-	fmt.Printf("%+v", err)
+	printFnNames(stdfmt.Sprintf("%+v", returnWithStack(errors.New("whoops"))))
 
-	// Example Output:
+	// Output:
 	// whoops
-	// github.com/pkg/errors_test.ExampleWithStack_printf
-	//         /home/fabstu/go/src/github.com/pkg/errors/example_test.go:55
+	// github.com/0LuigiCode0/errors_test.ExampleWithStack_printf
 	// testing.runExample
-	//         /usr/lib/go/src/testing/example.go:114
-	// testing.RunExamples
-	//         /usr/lib/go/src/testing/example.go:38
+	// testing.runExamples
 	// testing.(*M).Run
-	//         /usr/lib/go/src/testing/testing.go:744
-	// main.main
-	//         github.com/pkg/errors/_test/_testmain.go:106
-	// runtime.main
-	//         /usr/lib/go/src/runtime/proc.go:183
-	// runtime.goexit
-	//         /usr/lib/go/src/runtime/asm_amd64.s:2086
-	// github.com/pkg/errors_test.ExampleWithStack_printf
-	//         /home/fabstu/go/src/github.com/pkg/errors/example_test.go:56
-	// testing.runExample
-	//         /usr/lib/go/src/testing/example.go:114
-	// testing.RunExamples
-	//         /usr/lib/go/src/testing/example.go:38
-	// testing.(*M).Run
-	//         /usr/lib/go/src/testing/testing.go:744
-	// main.main
-	//         github.com/pkg/errors/_test/_testmain.go:106
-	// runtime.main
-	//         /usr/lib/go/src/runtime/proc.go:183
-	// runtime.goexit
-	//         /usr/lib/go/src/runtime/asm_amd64.s:2086
 }
 
 func ExampleWrap() {
 	cause := errors.New("whoops")
 	err := errors.Wrap(cause, "oh noes")
-	fmt.Println(err)
+	stdfmt.Println(err)
 
 	// Output: oh noes: whoops
 }
@@ -100,13 +110,14 @@ func fn() error {
 	e1 := errors.New("error")
 	e2 := errors.Wrap(e1, "inner")
 	e3 := errors.Wrap(e2, "middle")
+
 	return errors.Wrap(e3, "outer")
 }
 
 func ExampleCause() {
 	err := fn()
-	fmt.Println(err)
-	fmt.Println(errors.Cause(err))
+	stdfmt.Println(err)
+	stdfmt.Println(errors.Cause(err))
 
 	// Output: outer: middle: inner: error
 	// error
@@ -114,82 +125,64 @@ func ExampleCause() {
 
 func ExampleWrap_extended() {
 	err := fn()
-	fmt.Printf("%+v\n", err)
+	printFnNames(stdfmt.Sprintf("%+v", err))
 
-	// Example output:
-	// error
-	// github.com/pkg/errors_test.fn
-	//         /home/dfc/src/github.com/pkg/errors/example_test.go:47
-	// github.com/pkg/errors_test.ExampleCause_printf
-	//         /home/dfc/src/github.com/pkg/errors/example_test.go:63
+	// Output:
+	// outer: middle: inner: error
+	// github.com/0LuigiCode0/errors_test.fn
+	// github.com/0LuigiCode0/errors_test.ExampleWrap_extended
 	// testing.runExample
-	//         /home/dfc/go/src/testing/example.go:114
-	// testing.RunExamples
-	//         /home/dfc/go/src/testing/example.go:38
+	// testing.runExamples
 	// testing.(*M).Run
-	//         /home/dfc/go/src/testing/testing.go:744
-	// main.main
-	//         /github.com/pkg/errors/_test/_testmain.go:104
-	// runtime.main
-	//         /home/dfc/go/src/runtime/proc.go:183
-	// runtime.goexit
-	//         /home/dfc/go/src/runtime/asm_amd64.s:2059
-	// github.com/pkg/errors_test.fn
-	// 	  /home/dfc/src/github.com/pkg/errors/example_test.go:48: inner
-	// github.com/pkg/errors_test.fn
-	//        /home/dfc/src/github.com/pkg/errors/example_test.go:49: middle
-	// github.com/pkg/errors_test.fn
-	//      /home/dfc/src/github.com/pkg/errors/example_test.go:50: outer
+}
+
+func ExampleWrap_extended_global() {
+	err := errors.Wrap(errors.ErrExm1, "outer")
+	printFnNames(stdfmt.Sprintf("%+v", err))
+
+	// Output:
+	// outer: foo
+	// github.com/0LuigiCode0/errors_test.ExampleWrap_extended_global
+	// testing.runExample
+	// testing.runExamples
+	// testing.(*M).Run
 }
 
 func ExampleWrapf() {
 	cause := errors.New("whoops")
 	err := errors.Wrapf(cause, "oh noes #%d", 2)
-	fmt.Println(err)
+	stdfmt.Println(err)
 
 	// Output: oh noes #2: whoops
 }
 
 func ExampleErrorf_extended() {
-	err := errors.Errorf("whoops: %s", "foo")
-	fmt.Printf("%+v", err)
+	err := errors.Newf("whoops: %s", "foo")
+	printFnNames(stdfmt.Sprintf("%+v", err))
 
-	// Example output:
+	// Output:
 	// whoops: foo
-	// github.com/pkg/errors_test.ExampleErrorf
-	//         /home/dfc/src/github.com/pkg/errors/example_test.go:101
+	// github.com/0LuigiCode0/errors_test.ExampleErrorf_extended
 	// testing.runExample
-	//         /home/dfc/go/src/testing/example.go:114
-	// testing.RunExamples
-	//         /home/dfc/go/src/testing/example.go:38
+	// testing.runExamples
 	// testing.(*M).Run
-	//         /home/dfc/go/src/testing/testing.go:744
-	// main.main
-	//         /github.com/pkg/errors/_test/_testmain.go:102
-	// runtime.main
-	//         /home/dfc/go/src/runtime/proc.go:183
-	// runtime.goexit
-	//         /home/dfc/go/src/runtime/asm_amd64.s:2059
 }
 
 func Example_stackTrace() {
-	type stackTracer interface {
-		StackTrace() errors.StackTrace
-	}
-
-	err, ok := errors.Cause(fn()).(stackTracer)
+	err, ok := errors.Cause(fn()).(errors.StackTracer)
 	if !ok {
 		panic("oops, err does not implement stackTracer")
 	}
 
 	st := err.StackTrace()
-	fmt.Printf("%+v", st[0:2]) // top two frames
+	printFnNames(stdfmt.Sprintf("%+v", st)) // top two frames
 
-	// Example output:
-	// github.com/pkg/errors_test.fn
-	//	/home/dfc/src/github.com/pkg/errors/example_test.go:47
-	// github.com/pkg/errors_test.Example_stackTrace
-	//	/home/dfc/src/github.com/pkg/errors/example_test.go:127
+	// Output:
+	// github.com/0LuigiCode0/errors_test.fn
+	// github.com/0LuigiCode0/errors_test.Example_stackTrace
+	// testing.runExample
+	// testing.runExamples
+	// testing.(*M).Run
 }
 
 func ExampleCause_printf() {
@@ -199,7 +192,37 @@ func ExampleCause_printf() {
 		}()
 	}(), "failed")
 
-	fmt.Printf("%v", err)
+	stdfmt.Printf("%v", err)
 
 	// Output: failed: hello world
+}
+
+func ExampleWrapMulti() {
+	err1 := errors.New("whoops")
+	err2 := errors.New("oops")
+	printFnNames(stdfmt.Sprintf("%+v", errors.Wrap(errors.WrapMulti([]error{stdio.EOF, err1, err2}, "pops"), "pops")))
+
+	// Output:
+	// pops: pops: EOF
+	// whoops
+	// oops
+	// 1. EOF
+	// github.com/0LuigiCode0/errors_test.ExampleWrapMulti
+	// testing.runExample
+	// testing.runExamples
+	// testing.(*M).Run
+	// 2. whoops
+	// github.com/0LuigiCode0/errors_test.ExampleWrapMulti
+	// testing.runExample
+	// testing.runExamples
+	// testing.(*M).Run
+	// 3. oops
+	// github.com/0LuigiCode0/errors_test.ExampleWrapMulti
+	// testing.runExample
+	// testing.runExamples
+	// testing.(*M).Run
+	// github.com/0LuigiCode0/errors_test.ExampleWrapMulti
+	// testing.runExample
+	// testing.runExamples
+	// testing.(*M).Run
 }

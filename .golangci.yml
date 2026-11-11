@@ -1,0 +1,246 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - asasalint
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - copyloopvar
+    - durationcheck
+    - embeddedstructfieldcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    # - exhaustruct_v5
+    - exptostd
+    - funcorder
+    - gocheckcompilerdirectives
+    - goconst
+    - gocritic
+    - goprintffuncname
+    - gosec
+    - govet
+    - iface
+    - importas
+    - intrange
+    # - mirror
+    - mnd
+    - modernize
+    # - musttag
+    # - nilnil
+    - nlreturn
+    # - noinlineerr
+    - perfsprint
+    - protogetter
+    - recvcheck
+    - revive
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testifylint
+    - thelper
+    - unconvert
+    - unused
+    - wastedassign
+    # - wsl_v5
+  settings:
+    bidichk:
+      left-to-right-embedding: true
+      right-to-left-embedding: true
+      pop-directional-formatting: true
+      left-to-right-override: true
+      right-to-left-override: true
+      left-to-right-isolate: true
+      right-to-left-isolate: true
+      first-strong-isolate: true
+      pop-directional-isolate: true
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: false
+    exhaustive:
+      explicit-exhaustive: false
+      default-case-required: false
+      default-signifies-exhaustive: true
+      package-scope-only: true
+    funcorder:
+      constructor: true
+      struct-method: true
+      alphabetical: false
+      function: true
+    goconst:
+      match-constant: true
+      min-len: 3
+      min-occurrences: 3
+      ignore-calls: true
+      numbers: true
+      min: 3
+      max: 3
+      find-duplicates: false
+      eval-const-expressions: true
+      ignore-tests: true
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - whyNoLint
+        - unnamedResult
+        - commentedOutCode
+    gosec:
+      severity: medium
+      confidence: medium
+      excludes:
+        - G402
+        - G404
+    govet:
+      enable-all: true
+      disable-all: false
+      disable:
+        - fieldalignment
+      settings:
+    iface:
+      enable:
+        - identical
+        - opaque
+        - unusedmethod
+    importas:
+      no-unaliased: true
+      no-extra-aliases: false
+      alias:
+        - pkg: ^([a-z0-9]+)$
+          alias: std$1
+        # - pkg: ^(?:.*?/)?([a-z0-9]+)?[-._]?([a-z0-9]+)?[-._]?([^/]*)?[/]?([a-z0-9]+)?[-._]?([a-z0-9]+)?[-._]?([^/]*)?/([a-z0-9]+)?[-._]?([a-z0-9]+)?[-._]?([^/]*)?$
+        #   alias: $1$2$4$5$7$8
+    mnd:
+      checks:
+        - argument
+        - condition
+        - operation
+        - assign
+    nlreturn:
+      block-size: 3
+    perfsprint:
+      integer-format: true
+      int-conversion: true
+      error-format: true
+      err-error: true
+      errorf: true
+      string-format: true
+      sprintf1: true
+      strconcat: true
+      bool-format: true
+      hex-format: true
+      concat-loop: true
+      loop-other-ops: true
+    revive:
+      rules:
+        - name: empty-block
+        - name: superfluous-else
+        - name: early-return
+          arguments:
+            - preserve-scope
+            - allow-jump
+        - name: var-naming
+          arguments:
+            - []
+            - []
+            - - skip-initialism-name-checks: true
+        - name: unhandled-error
+          arguments:
+            - "^(.*).Read(All|Full)?$"
+            - "^(.*).(Fp|P)rint(ln|f)?$"
+            - "^(.*).Write(Byte|Rune|String)?$"
+        - name: error-naming
+        - name: atomic
+        - name: bool-literal-in-expr
+        - name: confusing-naming
+        - name: confusing-results
+        - name: context-keys-type
+        - name: datarace
+        - name: defer
+        - name: duplicated-imports
+        - name: enforce-map-style
+          arguments:
+            - literal
+        - name: enforce-repeated-arg-type-style
+          arguments:
+            - short
+        - name: enforce-slice-style
+          arguments:
+            - literal
+        - name: forbidden-call-in-wg-go
+        - name: identical-branches
+        - name: identical-ifelseif-branches
+        - name: identical-ifelseif-conditions
+        - name: identical-switch-branches
+        - name: identical-switch-conditions
+        - name: if-return
+        - name: import-shadowing
+        - name: increment-decrement
+        - name: indent-error-flow
+          arguments:
+            - "preserve-scope"
+        - name: inefficient-map-lookup
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: struct-tag
+        - name: time-equal
+        - name: unconditional-recursion
+        - name: unexported-naming
+        - name: unnecessary-if
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: use-any
+        - name: use-slices-sort
+        - name: use-waitgroup-go
+    staticcheck:
+      checks:
+        - "all"
+        - "-ST1000"
+        - "-ST1003"
+        - "-ST1016"
+        - "-ST1020"
+        - "-ST1021"
+        - "-ST1022"
+        - "-SA1019"
+    tagalign:
+      align: true
+      sort: false
+      strict: false
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+          yaml: snake
+          env: upperSnake
+          envconfig: upperSnake
+          whatever: snake
+    testifylint:
+      enable-all: true
+
+formatters:
+  enable:
+    - gofumpt
+    - gci
+    - swaggo
+  settings:
+    gofumpt:
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
+      extra-rules: true
+    gci:
+      sections: [standard, default]
+
+issues:
+  max-issues-per-linter: 0 # не ограничивать
+  max-same-issues: 0

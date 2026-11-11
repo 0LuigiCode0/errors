@@ -1,177 +1,198 @@
 package errors
 
 import (
-	"fmt"
-	"io"
-	"path"
-	"runtime"
-	"strconv"
-	"strings"
+	stderrors "errors"
+	stdfmt "fmt"
+	stdio "io"
+	stdruntime "runtime"
+	stdstrconv "strconv"
+	stdstrings "strings"
+	stdunsafe "unsafe"
 )
 
-// Frame represents a program counter inside a stack frame.
-// For historical reasons if Frame is interpreted as a uintptr
-// its value represents the program counter + 1.
-type Frame uintptr
+// FuncPtr представляет указатель на программу внутри кадра стека.
+type FuncPtr uintptr
 
-// pc returns the program counter for this frame;
-// multiple frames may have the same PC value.
-func (f Frame) pc() uintptr { return uintptr(f) - 1 }
-
-// file returns the full path to the file that contains the
-// function for this Frame's pc.
-func (f Frame) file() string {
-	fn := runtime.FuncForPC(f.pc())
-	if fn == nil {
-		return "unknown"
+func (f FuncPtr) String() string {
+	fun := stdruntime.FuncForPC(uintptr(f))
+	if fun == nil {
+		return ""
 	}
-	file, _ := fn.FileLine(f.pc())
-	return file
+	file, line := fun.FileLine(uintptr(f))
+
+	return stdfmt.Sprintf("%s %s:%d", fun.Name(), file, line)
 }
 
-// line returns the line number of source code of the
-// function for this Frame's pc.
-func (f Frame) line() int {
-	fn := runtime.FuncForPC(f.pc())
-	if fn == nil {
-		return 0
+func (f FuncPtr) WriteTo(w stdio.Writer) (int64, error) {
+	fun := stdruntime.FuncForPC(uintptr(f))
+	if fun == nil {
+		return 0, nil
 	}
-	_, line := fn.FileLine(f.pc())
-	return line
+	file, line := fun.FileLine(uintptr(f))
+	n, err := stdfmt.Fprintf(w, "%s %s:%d", fun.Name(), file, line)
+
+	return int64(n), err
 }
 
-// name returns the name of this function, if known.
-func (f Frame) name() string {
-	fn := runtime.FuncForPC(f.pc())
-	if fn == nil {
-		return "unknown"
-	}
-	return fn.Name()
+// StackTracer — ошибка, несущая трассировку стека.
+type StackTracer interface {
+	StackTrace() Stack
 }
 
-// Format formats the frame according to the fmt.Formatter interface.
-//
-//    %s    source file
-//    %d    source line
-//    %n    function name
-//    %v    equivalent to %s:%d
-//
-// Format accepts flags that alter the printing of some verbs, as follows:
-//
-//    %+s   function name and path of source file relative to the compile time
-//          GOPATH separated by \n\t (<funcname>\n\t<path>)
-//    %+v   equivalent to %+s:%d
-func (f Frame) Format(s fmt.State, verb rune) {
-	switch verb {
-	case 's':
-		switch {
-		case s.Flag('+'):
-			io.WriteString(s, f.name())
-			io.WriteString(s, "\n\t")
-			io.WriteString(s, f.file())
-		default:
-			io.WriteString(s, path.Base(f.file()))
+// Stack — стек точек вызова (указателей на программу). Реализует StackTracer и Stringer.
+type Stack []FuncPtr
+
+func (s Stack) StackTrace() Stack { return s }
+
+func (s Stack) String() string {
+	b := &stdstrings.Builder{}
+	for _, ff := range s {
+		if _, err := ff.WriteTo(b); err != nil {
+			return b.String()
 		}
-	case 'd':
-		io.WriteString(s, strconv.Itoa(f.line()))
-	case 'n':
-		io.WriteString(s, funcname(f.name()))
-	case 'v':
-		f.Format(s, 's')
-		io.WriteString(s, ":")
-		f.Format(s, 'd')
+		b.WriteByte('\n')
 	}
+
+	return b.String()
 }
 
-// MarshalText formats a stacktrace Frame as a text string. The output is the
-// same as that of fmt.Sprintf("%+v", f), but without newlines or tabs.
-func (f Frame) MarshalText() ([]byte, error) {
-	name := f.name()
-	if name == "unknown" {
-		return []byte(name), nil
+func (s Stack) WriteTo(w stdio.Writer) (int64, error) {
+	var n int64
+	for _, ff := range s {
+		subN, err := ff.WriteTo(w)
+		if err != nil {
+			return n, err
+		}
+		n += subN
+		if _, err := w.Write([]byte{'\n'}); err != nil {
+			return n, err
+		}
+		n++
 	}
-	return []byte(fmt.Sprintf("%s %s:%d", name, f.file(), f.line())), nil
+
+	return n, nil
 }
 
-// StackTrace is stack of Frames from innermost (newest) to outermost (oldest).
-type StackTrace []Frame
+// FuncFrame — одна точка вызова в трассировке стека.
+type FuncFrame struct {
+	File string `json:"source"`
+	Line int    `json:"line"`
+	Func string `json:"func"`
+}
 
-// Format formats the stack of Frames according to the fmt.Formatter interface.
+func (f *FuncFrame) String() string { return stdfmt.Sprintf("%s %s:%d", f.Func, f.File, f.Line) }
+func (f *FuncFrame) WriteTo(w stdio.Writer) (int64, error) {
+	n, err := stdfmt.Fprintf(w, "%s %s:%d", f.Func, f.File, f.Line)
+	return int64(n), err
+}
+
+// FrameLine — отрендеренный кадр стека одной строкой («func file:line»).
+// Элемент блока результата StackBlocks / MarshalStackError; в JSON
+// сериализуется как обычная строка.
+type FrameLine string
+
+// ParseStack разбирает одиночный кадр стека, отрендеренный одной строкой
+// в формате «func file:line»: имя функции — до последнего пробела, файл —
+// до последнего «:», номер строки — после него; номер должен быть ≥ 1.
+// Разделитель между именем функции и «file:line» — последний пробел,
+// поэтому имя функции не должно содержать пробелов. Возвращает ошибку,
+// если строка не соответствует формату кадра: нет пробела, нет части
+// «file:line», файл пуст, номер строки пуст, нечисловой или < 1.
+// Результат предназначен для передачи в сторонние сервисы (маппинг на
+// sentry.Frame: Func → Function, File → Filename, Line → LineNo).
+func (f FrameLine) ParseStack() (*FuncFrame, error) {
+	line := string(f)
+	idx := stdstrings.LastIndex(line, " ")
+	if idx <= 0 {
+		return nil, stdfmt.Errorf("errors: ParseStack: неверный кадр «%s»", line)
+	}
+	fn := line[:idx]
+	rest := line[idx+1:]
+	colon := stdstrings.LastIndex(rest, ":")
+	if colon <= 0 {
+		return nil, stdfmt.Errorf("errors: ParseStack: неверный кадр «%s»", line)
+	}
+	ln, err := stdstrconv.Atoi(rest[colon+1:])
+	if err != nil || ln < 1 {
+		return nil, stdfmt.Errorf("errors: ParseStack: неверный кадр «%s»", line)
+	}
+
+	return &FuncFrame{Func: fn, File: rest[:colon], Line: ln}, nil
+}
+
+// MarshalStackError возвращает кадры стека ошибки в виде массива блоков
+// кадров [][]FrameLine для записи в журнал: каждый блок — кадры одной
+// ошибки цепочки или мульти-ошибки (строки «func file:line»). Сообщения
+// ошибок в результат не попадают — они доступны через Error() и пишутся
+// в поле error лога. Если err == nil, возвращает nil.
 //
-//    %s	lists source files for each Frame in the stack
-//    %v	lists the source file and line number for each Frame in the stack
-//
-// Format accepts flags that alter the printing of some verbs, as follows:
-//
-//    %+v   Prints filename, function, and line number for each Frame in the stack.
-func (st StackTrace) Format(s fmt.State, verb rune) {
-	switch verb {
-	case 'v':
-		switch {
-		case s.Flag('+'):
-			for _, f := range st {
-				io.WriteString(s, "\n")
-				f.Format(s, verb)
+// Сигнатура `func(error) any` совместима с типичными marshaler-ами стека
+// в JSON-логгерах. В JSON результат сериализуется как вложенный массив
+// массивов строк.
+func MarshalStackError(err error) any {
+	if err == nil {
+		return nil
+	}
+
+	return StackBlocks(err)
+}
+
+// StackBlocks строит блоки отрендеренных кадров стека ошибок: каждый
+// элемент — кадры FrameLine (строки «func file:line») одной ошибки. Для
+// цепочки (повторные Unwrap) — по блоку на каждую ошибку, реализующую
+// StackTracer, в порядке от внешней ошибки к внутренним. Если в цепочке
+// есть мульти-ошибка (тип с Unwrap() []error) — сначала блоки её
+// под-ошибок (в порядке Unwrap() []error, рекурсивно: под-ошибка может
+// сама быть мульти-ошибкой или цепочкой), затем блоки обёрток,
+// окружающих этот узел мульти-ошибки, в порядке от внешней к внутренней.
+// Кадры, для которых runtime.FuncForPC не находит функцию, пропускаются;
+// ошибка без стека блока не формирует; если блоков нет вообще,
+// возвращает nil.
+func StackBlocks(err error) [][]FrameLine {
+	var out, suffix [][]FrameLine
+	for err != nil {
+		if ms, ok := err.(interface{ Unwrap() []error }); ok {
+			for _, e := range ms.Unwrap() {
+				out = append(out, StackBlocks(e)...)
 			}
-		case s.Flag('#'):
-			fmt.Fprintf(s, "%#v", []Frame(st))
-		default:
-			st.formatSlice(s, verb)
+
+			return append(out, suffix...)
 		}
-	case 's':
-		st.formatSlice(s, verb)
-	}
-}
-
-// formatSlice will format this StackTrace into the given buffer as a slice of
-// Frame, only valid when called with '%s' or '%v'.
-func (st StackTrace) formatSlice(s fmt.State, verb rune) {
-	io.WriteString(s, "[")
-	for i, f := range st {
-		if i > 0 {
-			io.WriteString(s, " ")
-		}
-		f.Format(s, verb)
-	}
-	io.WriteString(s, "]")
-}
-
-// stack represents a stack of program counters.
-type stack []uintptr
-
-func (s *stack) Format(st fmt.State, verb rune) {
-	switch verb {
-	case 'v':
-		switch {
-		case st.Flag('+'):
-			for _, pc := range *s {
-				f := Frame(pc)
-				fmt.Fprintf(st, "\n%+v", f)
+		if st, ok := err.(StackTracer); ok {
+			block := make([]FrameLine, 0, len(st.StackTrace()))
+			for _, f := range st.StackTrace() {
+				if s := f.String(); s != "" {
+					block = append(block, FrameLine(s))
+				}
+			}
+			if len(block) > 0 {
+				suffix = append(suffix, block)
 			}
 		}
+		err = stderrors.Unwrap(err)
 	}
+
+	return suffix
 }
 
-func (s *stack) StackTrace() StackTrace {
-	f := make([]Frame, len(*s))
-	for i := 0; i < len(f); i++ {
-		f[i] = Frame((*s)[i])
+var (
+	StackSize = 10
+	CutTail   = 2
+	skipCall  = 3
+)
+
+// callers возвращает стек указателей на программу в точке вызова
+// вызывающей функции.
+func callers() Stack {
+	pcs := make([]uintptr, StackSize)
+	n := stdruntime.Callers(skipCall, pcs)
+	if n > CutTail {
+		n -= CutTail
 	}
-	return f
-}
+	pcs = pcs[:n]
+	for i := range n {
+		pcs[i]--
+	}
 
-func callers() *stack {
-	const depth = 32
-	var pcs [depth]uintptr
-	n := runtime.Callers(3, pcs[:])
-	var st stack = pcs[0:n]
-	return &st
-}
-
-// funcname removes the path prefix component of a function's name reported by func.Name().
-func funcname(name string) string {
-	i := strings.LastIndex(name, "/")
-	name = name[i+1:]
-	i = strings.Index(name, ".")
-	return name[i+1:]
+	return *(*Stack)(stdunsafe.Pointer(&pcs))
 }
